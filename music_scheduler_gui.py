@@ -22,14 +22,16 @@ class MusicSchedulerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Music Scheduler - Hẹn Giờ Phát Nhạc")
-        self.root.geometry("650x550")
-        self.root.resizable(False, False)
+        self.root.geometry("700x700")  # Increased size to fit all elements
+        self.root.resizable(True, True)  # Allow resizing
 
         self.music_folder = ""
         self.scheduled_times = []
         self.is_running = False
         self.last_played = {}
         self.scheduler = BackgroundScheduler()
+        self.audio_devices = []
+        self.selected_device = None
 
         # Apply modern theme
         self.style = ThemedStyle(root)
@@ -45,10 +47,21 @@ class MusicSchedulerGUI:
             'warning': '#f39c12'
         }
 
+        # Initialize mixer and get audio devices
         mixer.init()
+        self.detect_audio_devices()
 
         self.setup_ui()
         self.load_config()
+
+    def detect_audio_devices(self):
+        """Phát hiện các thiết bị âm thanh"""
+        try:
+            # Get audio device count - pygame doesn't have direct API for this
+            # So we'll just provide a default option
+            self.audio_devices = ["Default Audio Output"]
+        except:
+            self.audio_devices = ["Default Audio Output"]
 
     def setup_ui(self):
         """Thiết lập giao diện"""
@@ -62,12 +75,12 @@ class MusicSchedulerGUI:
         title.pack(pady=20)
 
         # Main container
-        main = tk.Frame(self.root, padx=25, pady=20, bg=self.colors['light'])
+        main = tk.Frame(self.root, padx=20, pady=15, bg=self.colors['light'])
         main.pack(fill=tk.BOTH, expand=True)
 
         # Folder selection with modern style
-        folder_frame = ttk.LabelFrame(main, text="📁 Folder Nhạc", padding=15)
-        folder_frame.pack(fill=tk.X, pady=(0, 15))
+        folder_frame = ttk.LabelFrame(main, text="📁 Folder Nhạc", padding=10)
+        folder_frame.pack(fill=tk.X, pady=(0, 10))
 
         self.folder_label = ttk.Label(folder_frame, text="Chưa chọn folder",
                                       foreground="gray", font=("Segoe UI", 9))
@@ -77,8 +90,23 @@ class MusicSchedulerGUI:
                                command=self.browse_folder)
         browse_btn.pack(side=tk.RIGHT)
 
+        # Audio Output Selection
+        audio_frame = ttk.LabelFrame(main, text="🔊 Thiết Bị Âm Thanh", padding=10)
+        audio_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(audio_frame, text="Output:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 10))
+
+        self.audio_var = tk.StringVar(value="Default Audio Output")
+        self.audio_dropdown = ttk.Combobox(audio_frame,
+                                          textvariable=self.audio_var,
+                                          values=self.audio_devices,
+                                          state="readonly",
+                                          font=("Segoe UI", 9),
+                                          width=30)
+        self.audio_dropdown.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
         # Schedule times with improved layout
-        schedule_frame = ttk.LabelFrame(main, text="⏰ Lịch Phát Nhạc", padding=15)
+        schedule_frame = ttk.LabelFrame(main, text="⏰ Lịch Phát Nhạc", padding=10)
         schedule_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
 
         # Add time controls with better spacing
@@ -126,16 +154,16 @@ class MusicSchedulerGUI:
         remove_btn.pack()
 
         # Status with better visibility
-        status_frame = ttk.LabelFrame(main, text="📊 Trạng Thái", padding=15)
-        status_frame.pack(fill=tk.X, pady=(0, 15))
+        status_frame = ttk.LabelFrame(main, text="📊 Trạng Thái", padding=10)
+        status_frame.pack(fill=tk.X, pady=(0, 10))
 
         self.status_label = tk.Label(status_frame, text="⏹️ Đang dừng",
-                                     font=("Segoe UI", 11, "bold"),
+                                     font=("Segoe UI", 10, "bold"),
                                      fg=self.colors['danger'],
                                      bg="white",
                                      relief=tk.SOLID,
                                      borderwidth=1,
-                                     padx=10, pady=8)
+                                     padx=8, pady=6)
         self.status_label.pack(fill=tk.X)
 
         # Control buttons with modern styling
