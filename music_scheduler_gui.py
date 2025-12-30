@@ -16,6 +16,9 @@ from pygame import mixer
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from ttkthemes import ThemedStyle
+import sounddevice as sd
+import soundfile as sf
+import numpy as np
 
 
 class MusicSchedulerGUI:
@@ -32,6 +35,9 @@ class MusicSchedulerGUI:
         self.scheduler = BackgroundScheduler()
         self.audio_devices = []
         self.selected_device = None
+        self.current_volume = 0.7  # Default volume 70%
+        self.is_paused = False
+        self.playback_stream = None
 
         # Apply modern theme
         self.style = ThemedStyle(root)
@@ -57,11 +63,29 @@ class MusicSchedulerGUI:
     def detect_audio_devices(self):
         """Phát hiện các thiết bị âm thanh"""
         try:
-            # Get audio device count - pygame doesn't have direct API for this
-            # So we'll just provide a default option
+            devices = sd.query_devices()
+            self.device_info = []
+            self.audio_devices = []
+
+            # Get output devices only
+            for idx, device in enumerate(devices):
+                if device['max_output_channels'] > 0:  # Output device
+                    device_name = f"{device['name']}"
+                    self.audio_devices.append(device_name)
+                    self.device_info.append({
+                        'index': idx,
+                        'name': device_name,
+                        'channels': device['max_output_channels']
+                    })
+
+            # If no devices found, add default
+            if not self.audio_devices:
+                self.audio_devices = ["Default Audio Output"]
+                self.device_info = [{'index': None, 'name': 'Default Audio Output', 'channels': 2}]
+        except Exception as e:
+            print(f"Error detecting audio devices: {e}")
             self.audio_devices = ["Default Audio Output"]
-        except:
-            self.audio_devices = ["Default Audio Output"]
+            self.device_info = [{'index': None, 'name': 'Default Audio Output', 'channels': 2}]
 
     def setup_ui(self):
         """Thiết lập giao diện"""
@@ -97,6 +121,11 @@ class MusicSchedulerGUI:
         ttk.Label(audio_frame, text="Output:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 10))
 
         self.audio_var = tk.StringVar(value="Default Audio Output")
+        # Create custom combobox style with dark text
+        combo_style = ttk.Style()
+        combo_style.map('TCombobox', fieldbackground=[('readonly', 'white')])
+        combo_style.map('TCombobox', foreground=[('readonly', 'black')])
+
         self.audio_dropdown = ttk.Combobox(audio_frame,
                                           textvariable=self.audio_var,
                                           values=self.audio_devices,
@@ -104,6 +133,36 @@ class MusicSchedulerGUI:
                                           font=("Segoe UI", 9),
                                           width=30)
         self.audio_dropdown.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Playback Controls
+        controls_frame = ttk.LabelFrame(main, text="🎛️ Điều Khiển Phát Nhạc", padding=10)
+        controls_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Volume control
+        vol_frame = ttk.Frame(controls_frame)
+        vol_frame.pack(fill=tk.X, pady=(0, 5))
+
+        ttk.Label(vol_frame, text="🔊 Volume:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 10))
+        self.volume_var = tk.DoubleVar(value=70)
+        self.volume_slider = ttk.Scale(vol_frame, from_=0, to=100,
+                                      variable=self.volume_var,
+                                      orient=tk.HORIZONTAL,
+                                      command=self.on_volume_change)
+        self.volume_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.volume_label = ttk.Label(vol_frame, text="70%", font=("Segoe UI", 9), width=4)
+        self.volume_label.pack(side=tk.LEFT)
+
+        # Playback buttons
+        btn_controls = ttk.Frame(controls_frame)
+        btn_controls.pack(fill=tk.X)
+
+        self.pause_btn = ttk.Button(btn_controls, text="⏸️ Pause",
+                                    command=self.toggle_pause, state=tk.DISABLED)
+        self.pause_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.stop_btn = ttk.Button(btn_controls, text="⏹️ Stop",
+                                   command=self.stop_song, state=tk.DISABLED)
+        self.stop_btn.pack(side=tk.LEFT)
 
         # Schedule times with improved layout
         schedule_frame = ttk.LabelFrame(main, text="⏰ Lịch Phát Nhạc", padding=10)
@@ -266,15 +325,31 @@ class MusicSchedulerGUI:
             # Play song in a separate thread to not block scheduler
             def play_thread():
                 try:
-                    mixer.music.load(str(song))
-                    mixer.music.play()
-
-                    # Wait until song finishes
-                    while mixer.music.get_busy():
-                        if not self.is_running:
-                            mixer.music.stop()
+                    # Get selected device index
+                    selected_device_name = self.audio_var.get()
+                    device_index = None
+                    for dev_info in self.device_info:
+                        if dev_info['name'] == selected_device_name:
+                            device_index = dev_info['index']
                             break
-                        threading.Event().wait(0.5)
+
+                    # Load audio file
+                    data, samplerate = sf.read(str(song))
+
+                    # Apply volume
+                    data = data * self.current_volume
+
+                    # Enable playback controls
+                    self.root.after(0, lambda: self.pause_btn.config(state=tk.NORMAL))
+                    self.root.after(0, lambda: self.stop_btn.config(state=tk.NORMAL))
+
+                    # Play using sounddevice on selected device
+                    sd.play(data, samplerate, device=device_index)
+                    sd.wait()  # Wait until sound finishes
+
+                    # Disable playback controls
+                    self.root.after(0, lambda: self.pause_btn.config(state=tk.DISABLED))
+                    self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
 
                     # Mark as played
                     self.last_played[scheduled_time] = today
@@ -286,8 +361,40 @@ class MusicSchedulerGUI:
                             fg=self.colors['primary']))
                 except Exception as e:
                     print(f"Lỗi phát nhạc: {e}")
+                    self.root.after(0, lambda: self.status_label.config(
+                        text=f"❌ Lỗi phát nhạc: {str(e)[:30]}...",
+                        fg=self.colors['danger']))
 
             threading.Thread(target=play_thread, daemon=True).start()
+
+    def on_volume_change(self, value):
+        """Callback when volume slider changes"""
+        volume_percent = int(float(value))
+        self.current_volume = volume_percent / 100.0
+        self.volume_label.config(text=f"{volume_percent}%")
+
+    def toggle_pause(self):
+        """Pause/Resume playback"""
+        if sd.get_stream().active:
+            if self.is_paused:
+                # Resume
+                self.is_paused = False
+                self.pause_btn.config(text="⏸️ Pause")
+            else:
+                # Pause
+                self.is_paused = True
+                self.pause_btn.config(text="▶️ Resume")
+                sd.stop()
+
+    def stop_song(self):
+        """Stop current song"""
+        sd.stop()
+        self.pause_btn.config(state=tk.DISABLED, text="⏸️ Pause")
+        self.stop_btn.config(state=tk.DISABLED)
+        self.is_paused = False
+        self.status_label.config(
+            text="⏹️ Đã dừng phát nhạc",
+            fg=self.colors['warning'])
 
     def update_scheduler_jobs(self):
         """Cập nhật các jobs trong scheduler"""
