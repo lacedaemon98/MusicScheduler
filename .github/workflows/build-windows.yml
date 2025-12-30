@@ -27,17 +27,32 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: 🔨 Build portable executable
-      run: python build_portable.py
+    - name: 🔨 Build Windows executable
+      run: |
+        echo "🔨 Building Windows .exe..."
+        pyinstaller --name=MusicScheduler --onefile --windowed --clean music_scheduler_gui.py
 
-    - name: 📤 Upload ZIP artifact
+        echo "📦 Creating distribution package..."
+        mkdir MusicScheduler-Windows
+        copy dist\MusicScheduler.exe MusicScheduler-Windows\
+        echo 🎵 Music Scheduler - Windows Edition > MusicScheduler-Windows\README.txt
+        echo. >> MusicScheduler-Windows\README.txt
+        echo Cach su dung: >> MusicScheduler-Windows\README.txt
+        echo 1. Chay MusicScheduler.exe >> MusicScheduler-Windows\README.txt
+        echo 2. Chon folder nhac >> MusicScheduler-Windows\README.txt
+        echo 3. Them lich phat nhac >> MusicScheduler-Windows\README.txt
+        echo 4. Nhan "Bat Dau" >> MusicScheduler-Windows\README.txt
+
+        powershell Compress-Archive -Path MusicScheduler-Windows -DestinationPath MusicScheduler-Windows.zip
+
+    - name: 📤 Upload Windows app artifact
       uses: actions/upload-artifact@v4
       with:
-        name: MusicScheduler-Windows-Portable
-        path: MusicScheduler_Portable.zip
+        name: MusicScheduler-Windows
+        path: MusicScheduler-Windows.zip
         retention-days: 30
 
     - name: ✅ Build complete
       run: |
-        echo "✅ Build thành công!"
-        echo "📦 File ZIP đã được tạo: MusicScheduler_Portable.zip"
+        echo "✅ Build Windows thành công!"
+        echo "📦 File đã được tạo: MusicScheduler.exe"
