@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest  # Chạy trên Windows
+    env:
+      PYTHONIOENCODING: utf-8  # Fix encoding for Vietnamese and emojis
 
     steps:
     - name: 📥 Checkout code

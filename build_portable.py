@@ -4,10 +4,16 @@ Chạy script này sẽ tạo file ZIP có thể giải nén và chạy trên b�
 """
 
 import os
+import sys
 import shutil
 import zipfile
 from pathlib import Path
 import PyInstaller.__main__
+
+# Fix encoding for Windows console
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 print("="*60)
 print("🔨 BẮT ĐẦU BUILD MUSIC SCHEDULER - PORTABLE VERSION")
