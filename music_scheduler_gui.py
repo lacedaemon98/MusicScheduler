@@ -224,7 +224,7 @@ class MusicSchedulerGUI:
                             self.root.after(0, lambda: self.status_label.config(
                                 text="✅ Đã phát xong - Chờ lịch tiếp theo", fg="blue"))
 
-            time.sleep(30)  # Kiểm tra mỗi 30 giây
+            time.sleep(5)  # Kiểm tra mỗi 5 giây để không bỏ lỡ
 
     def start_scheduler(self):
         """Bắt đầu scheduler"""
