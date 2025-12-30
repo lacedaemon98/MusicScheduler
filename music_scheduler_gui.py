@@ -15,7 +15,11 @@ from tkinter import ttk, filedialog, messagebox
 from pygame import mixer
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
-from ttkthemes import ThemedStyle
+try:
+    from ttkthemes import ThemedStyle
+    HAS_TTKTHEMES = True
+except ImportError:
+    HAS_TTKTHEMES = False
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
@@ -27,6 +31,7 @@ class MusicSchedulerGUI:
         self.root.title("Music Scheduler - Hẹn Giờ Phát Nhạc")
         self.root.geometry("700x700")  # Increased size to fit all elements
         self.root.resizable(True, True)  # Allow resizing
+        # Use system default background for better macOS compatibility
 
         self.music_folder = ""
         self.scheduled_times = []
@@ -38,10 +43,17 @@ class MusicSchedulerGUI:
         self.current_volume = 0.7  # Default volume 70%
         self.is_paused = False
         self.playback_stream = None
+        self.audio_data = None
+        self.audio_position = 0
+        self.samplerate = None
 
-        # Apply modern theme
-        self.style = ThemedStyle(root)
-        self.style.set_theme("arc")  # Modern, clean theme
+        # Apply modern theme - use default for better macOS compatibility
+        self.style = ttk.Style()
+        # Try to use aqua theme on macOS for native look
+        try:
+            self.style.theme_use('aqua')
+        except:
+            self.style.theme_use('default')
 
         # Custom colors
         self.colors = {
@@ -53,7 +65,7 @@ class MusicSchedulerGUI:
             'warning': '#f39c12'
         }
 
-        # Initialize mixer and get audio devices
+        # Initialize mixer and detect audio devices
         mixer.init()
         self.detect_audio_devices()
 
@@ -94,12 +106,12 @@ class MusicSchedulerGUI:
         header.pack(fill=tk.X)
 
         title = tk.Label(header, text="🎵 Music Scheduler",
-                        font=("Segoe UI", 20, "bold"),
+                        font=("Helvetica", 20, "bold"),
                         bg=self.colors['dark'], fg="white")
         title.pack(pady=20)
 
         # Main container
-        main = tk.Frame(self.root, padx=20, pady=15, bg=self.colors['light'])
+        main = ttk.Frame(self.root, padding=(20, 15))
         main.pack(fill=tk.BOTH, expand=True)
 
         # Folder selection with modern style
@@ -107,7 +119,7 @@ class MusicSchedulerGUI:
         folder_frame.pack(fill=tk.X, pady=(0, 10))
 
         self.folder_label = ttk.Label(folder_frame, text="Chưa chọn folder",
-                                      foreground="gray", font=("Segoe UI", 9))
+                                      foreground="gray")
         self.folder_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
 
         browse_btn = ttk.Button(folder_frame, text="Chọn Folder",
@@ -118,9 +130,9 @@ class MusicSchedulerGUI:
         audio_frame = ttk.LabelFrame(main, text="🔊 Thiết Bị Âm Thanh", padding=10)
         audio_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(audio_frame, text="Output:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(audio_frame, text="Output:", font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 10))
 
-        self.audio_var = tk.StringVar(value="Default Audio Output")
+        self.audio_var = tk.StringVar(value=self.audio_devices[0] if self.audio_devices else "Default Audio Output")
         # Create custom combobox style with dark text
         combo_style = ttk.Style()
         combo_style.map('TCombobox', fieldbackground=[('readonly', 'white')])
@@ -130,9 +142,10 @@ class MusicSchedulerGUI:
                                           textvariable=self.audio_var,
                                           values=self.audio_devices,
                                           state="readonly",
-                                          font=("Segoe UI", 9),
+                                          font=("Helvetica", 9),
                                           width=30)
         self.audio_dropdown.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.audio_dropdown.bind('<<ComboboxSelected>>', self.on_device_change)
 
         # Playback Controls
         controls_frame = ttk.LabelFrame(main, text="🎛️ Điều Khiển Phát Nhạc", padding=10)
@@ -142,14 +155,14 @@ class MusicSchedulerGUI:
         vol_frame = ttk.Frame(controls_frame)
         vol_frame.pack(fill=tk.X, pady=(0, 5))
 
-        ttk.Label(vol_frame, text="🔊 Volume:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(vol_frame, text="🔊 Volume:", font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 10))
         self.volume_var = tk.DoubleVar(value=70)
         self.volume_slider = ttk.Scale(vol_frame, from_=0, to=100,
                                       variable=self.volume_var,
                                       orient=tk.HORIZONTAL,
                                       command=self.on_volume_change)
         self.volume_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-        self.volume_label = ttk.Label(vol_frame, text="70%", font=("Segoe UI", 9), width=4)
+        self.volume_label = ttk.Label(vol_frame, text="70%", font=("Helvetica", 9), width=4)
         self.volume_label.pack(side=tk.LEFT)
 
         # Playback buttons
@@ -172,18 +185,18 @@ class MusicSchedulerGUI:
         add_frame = ttk.Frame(schedule_frame)
         add_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(add_frame, text="Giờ:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(add_frame, text="Giờ:", font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 5))
         self.hour_var = tk.StringVar(value="12")
         hour_spin = ttk.Spinbox(add_frame, from_=0, to=23, width=7,
                                 textvariable=self.hour_var, format="%02.0f",
-                                font=("Segoe UI", 10))
+                                font=("Helvetica", 10))
         hour_spin.pack(side=tk.LEFT, padx=(0, 10))
 
-        ttk.Label(add_frame, text="Phút:", font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(add_frame, text="Phút:", font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 5))
         self.minute_var = tk.StringVar(value="00")
         minute_spin = ttk.Spinbox(add_frame, from_=0, to=59, width=7,
                                   textvariable=self.minute_var, format="%02.0f",
-                                  font=("Segoe UI", 10))
+                                  font=("Helvetica", 10))
         minute_spin.pack(side=tk.LEFT, padx=(0, 15))
 
         add_btn = ttk.Button(add_frame, text="➕ Thêm Lịch",
@@ -216,14 +229,10 @@ class MusicSchedulerGUI:
         status_frame = ttk.LabelFrame(main, text="📊 Trạng Thái", padding=10)
         status_frame.pack(fill=tk.X, pady=(0, 10))
 
-        self.status_label = tk.Label(status_frame, text="⏹️ Đang dừng",
-                                     font=("Segoe UI", 10, "bold"),
-                                     fg=self.colors['danger'],
-                                     bg="white",
-                                     relief=tk.SOLID,
-                                     borderwidth=1,
-                                     padx=8, pady=6)
-        self.status_label.pack(fill=tk.X)
+        self.status_label = ttk.Label(status_frame, text="⏹️ Đang dừng",
+                                     font=("Helvetica", 10, "bold"),
+                                     foreground=self.colors['danger'])
+        self.status_label.pack(fill=tk.X, padx=8, pady=6)
 
         # Control buttons with modern styling
         btn_frame = ttk.Frame(main)
@@ -231,8 +240,8 @@ class MusicSchedulerGUI:
 
         # Create custom button style
         style = ttk.Style()
-        style.configure('Start.TButton', font=('Segoe UI', 11, 'bold'))
-        style.configure('Stop.TButton', font=('Segoe UI', 11, 'bold'))
+        style.configure('Start.TButton', font=('Helvetica', 11, 'bold'))
+        style.configure('Stop.TButton', font=('Helvetica', 11, 'bold'))
 
         self.start_btn = ttk.Button(btn_frame, text="▶️ Bắt Đầu",
                                     command=self.start_scheduler,
@@ -325,40 +334,17 @@ class MusicSchedulerGUI:
             # Play song in a separate thread to not block scheduler
             def play_thread():
                 try:
-                    # Get selected device index
-                    selected_device_name = self.audio_var.get()
-                    device_index = None
-                    for dev_info in self.device_info:
-                        if dev_info['name'] == selected_device_name:
-                            device_index = dev_info['index']
-                            break
-
                     # Load audio file
-                    data, samplerate = sf.read(str(song))
-
-                    # Apply volume
-                    data = data * self.current_volume
+                    self.audio_data, self.samplerate = sf.read(str(song))
+                    self.audio_position = 0
 
                     # Enable playback controls
                     self.root.after(0, lambda: self.pause_btn.config(state=tk.NORMAL))
                     self.root.after(0, lambda: self.stop_btn.config(state=tk.NORMAL))
 
-                    # Play using sounddevice on selected device
-                    sd.play(data, samplerate, device=device_index)
-                    sd.wait()  # Wait until sound finishes
+                    # Start playback stream
+                    self.start_playback_stream(scheduled_time, today)
 
-                    # Disable playback controls
-                    self.root.after(0, lambda: self.pause_btn.config(state=tk.DISABLED))
-                    self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
-
-                    # Mark as played
-                    self.last_played[scheduled_time] = today
-
-                    # Update UI
-                    if self.is_running:
-                        self.root.after(0, lambda: self.status_label.config(
-                            text="✅ Đã phát xong - Chờ lịch tiếp theo",
-                            fg=self.colors['primary']))
                 except Exception as e:
                     print(f"Lỗi phát nhạc: {e}")
                     self.root.after(0, lambda: self.status_label.config(
@@ -367,15 +353,127 @@ class MusicSchedulerGUI:
 
             threading.Thread(target=play_thread, daemon=True).start()
 
+    def start_playback_stream(self, scheduled_time=None, today=None):
+        """Start or restart the playback stream with current device"""
+        try:
+            # Stop existing stream if any
+            if self.playback_stream and self.playback_stream.active:
+                self.playback_stream.stop()
+                self.playback_stream.close()
+
+            # Get selected device index
+            selected_device_name = self.audio_var.get()
+            device_index = None
+            for dev_info in self.device_info:
+                if dev_info['name'] == selected_device_name:
+                    device_index = dev_info['index']
+                    break
+
+            # Callback function for real-time audio
+            def audio_callback(outdata, frames, time_info, status):
+                if status:
+                    print(status)
+
+                if self.is_paused:
+                    outdata.fill(0)  # Output silence when paused
+                    return
+
+                # Get the next chunk of audio
+                start = self.audio_position
+                end = start + frames
+
+                if start >= len(self.audio_data):
+                    raise sd.CallbackStop()
+
+                chunk = self.audio_data[start:end]
+
+                # Apply real-time volume
+                chunk = chunk * self.current_volume
+
+                # Handle end of audio
+                if len(chunk) < frames:
+                    outdata[:len(chunk)] = chunk
+                    outdata[len(chunk):].fill(0)
+                    raise sd.CallbackStop()
+                else:
+                    outdata[:] = chunk
+
+                self.audio_position = end
+
+            # Create and start stream with selected device
+            self.playback_stream = sd.OutputStream(
+                samplerate=self.samplerate,
+                channels=self.audio_data.shape[1] if len(self.audio_data.shape) > 1 else 1,
+                callback=audio_callback,
+                device=device_index
+            )
+            self.playback_stream.start()
+
+            # Wait until playback is finished
+            while self.audio_position < len(self.audio_data):
+                if not self.is_running or not self.playback_stream.active:
+                    break
+                sd.sleep(100)
+
+            # Clean up
+            if self.playback_stream:
+                self.playback_stream.stop()
+                self.playback_stream.close()
+                self.playback_stream = None
+
+            # Disable playback controls
+            self.root.after(0, lambda: self.pause_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
+
+            # Mark as played
+            if scheduled_time and today:
+                self.last_played[scheduled_time] = today
+
+            # Update UI
+            if self.is_running:
+                self.root.after(0, lambda: self.status_label.config(
+                    text="✅ Đã phát xong - Chờ lịch tiếp theo",
+                    fg=self.colors['primary']))
+
+        except Exception as e:
+            print(f"Lỗi stream: {e}")
+            self.root.after(0, lambda: self.status_label.config(
+                text=f"❌ Lỗi stream: {str(e)[:30]}...",
+                fg=self.colors['danger']))
+
     def on_volume_change(self, value):
         """Callback when volume slider changes"""
         volume_percent = int(float(value))
         self.current_volume = volume_percent / 100.0
         self.volume_label.config(text=f"{volume_percent}%")
 
+    def on_device_change(self, event):
+        """Callback when audio device changes - restart stream with new device"""
+        if self.playback_stream and self.playback_stream.active and self.audio_data is not None:
+            # Save current position
+            saved_position = self.audio_position
+
+            # Restart stream in a thread to avoid blocking UI
+            def restart_stream():
+                try:
+                    # Stop current stream
+                    if self.playback_stream:
+                        self.playback_stream.stop()
+                        self.playback_stream.close()
+
+                    # Restore position (will restart from here)
+                    self.audio_position = saved_position
+
+                    # Restart stream with new device
+                    self.start_playback_stream()
+                except Exception as e:
+                    print(f"Lỗi khi đổi device: {e}")
+
+            threading.Thread(target=restart_stream, daemon=True).start()
+
     def toggle_pause(self):
         """Pause/Resume playback"""
-        if sd.get_stream().active:
+        if self.playback_stream and self.playback_stream.active:
             if self.is_paused:
                 # Resume
                 self.is_paused = False
@@ -384,11 +482,13 @@ class MusicSchedulerGUI:
                 # Pause
                 self.is_paused = True
                 self.pause_btn.config(text="▶️ Resume")
-                sd.stop()
 
     def stop_song(self):
         """Stop current song"""
-        sd.stop()
+        if self.playback_stream and self.playback_stream.active:
+            self.playback_stream.stop()
+            self.playback_stream.close()
+            self.playback_stream = None
         self.pause_btn.config(state=tk.DISABLED, text="⏸️ Pause")
         self.stop_btn.config(state=tk.DISABLED)
         self.is_paused = False
@@ -447,7 +547,7 @@ class MusicSchedulerGUI:
 
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
-        self.status_label.config(text="⏹️ Đã dừng", fg=self.colors['danger'])
+        self.status_label.config(text="⏹️ Đã dừng", foreground=self.colors['danger'])
 
     def save_config(self):
         """Lưu cấu hình"""
