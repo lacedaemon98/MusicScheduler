@@ -1,2 +1,4 @@
 pygame>=2.5.0
 pyinstaller>=6.0.0
+apscheduler>=3.10.0
+ttkthemes>=3.2.0
