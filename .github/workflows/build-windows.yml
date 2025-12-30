@@ -1,0 +1,41 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Cho phép chạy thủ công từ GitHub UI
+
+jobs:
+  build:
+    runs-on: windows-latest  # Chạy trên Windows
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🔨 Build portable executable
+      run: python build_portable.py
+
+    - name: 📤 Upload ZIP artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MusicScheduler-Windows-Portable
+        path: MusicScheduler_Portable.zip
+        retention-days: 30
+
+    - name: ✅ Build complete
+      run: |
+        echo "✅ Build thành công!"
+        echo "📦 File ZIP đã được tạo: MusicScheduler_Portable.zip"

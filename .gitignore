@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+dist/
+*.spec
+MusicScheduler_Portable/
+MusicScheduler_Portable.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Config files (user-specific)
+music_scheduler_config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
