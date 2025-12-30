@@ -35,15 +35,21 @@ jobs:
         echo "📦 Creating distribution package..."
         mkdir MusicScheduler-Windows
         copy dist\MusicScheduler.exe MusicScheduler-Windows\
-        echo 🎵 Music Scheduler - Windows Edition > MusicScheduler-Windows\README.txt
-        echo. >> MusicScheduler-Windows\README.txt
-        echo Cach su dung: >> MusicScheduler-Windows\README.txt
-        echo 1. Chay MusicScheduler.exe >> MusicScheduler-Windows\README.txt
-        echo 2. Chon folder nhac >> MusicScheduler-Windows\README.txt
-        echo 3. Them lich phat nhac >> MusicScheduler-Windows\README.txt
-        echo 4. Nhan "Bat Dau" >> MusicScheduler-Windows\README.txt
 
-        powershell Compress-Archive -Path MusicScheduler-Windows -DestinationPath MusicScheduler-Windows.zip
+        # Create README using PowerShell
+        @"
+        Music Scheduler - Windows Edition
+
+        Cach su dung:
+        1. Chay MusicScheduler.exe
+        2. Chon folder nhac
+        3. Them lich phat nhac
+        4. Nhan "Bat Dau"
+
+        Luu y: Phan mem se tu dong luu cau hinh.
+        "@ | Out-File -FilePath MusicScheduler-Windows\README.txt -Encoding UTF8
+
+        Compress-Archive -Path MusicScheduler-Windows -DestinationPath MusicScheduler-Windows.zip
 
     - name: 📤 Upload Windows app artifact
       uses: actions/upload-artifact@v4
