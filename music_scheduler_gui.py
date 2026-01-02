@@ -329,7 +329,7 @@ class MusicSchedulerGUI:
             # Update UI
             self.root.after(0, lambda: self.status_label.config(
                 text=f"🎵 Đang phát: {song.name}",
-                fg=self.colors['success']))
+                foreground=self.colors['success']))
 
             # Play song in a separate thread to not block scheduler
             def play_thread():
@@ -349,7 +349,7 @@ class MusicSchedulerGUI:
                     print(f"Lỗi phát nhạc: {e}")
                     self.root.after(0, lambda: self.status_label.config(
                         text=f"❌ Lỗi phát nhạc: {str(e)[:30]}...",
-                        fg=self.colors['danger']))
+                        foreground=self.colors['danger']))
 
             threading.Thread(target=play_thread, daemon=True).start()
 
@@ -433,13 +433,13 @@ class MusicSchedulerGUI:
             if self.is_running:
                 self.root.after(0, lambda: self.status_label.config(
                     text="✅ Đã phát xong - Chờ lịch tiếp theo",
-                    fg=self.colors['primary']))
+                    foreground=self.colors['primary']))
 
         except Exception as e:
             print(f"Lỗi stream: {e}")
             self.root.after(0, lambda: self.status_label.config(
                 text=f"❌ Lỗi stream: {str(e)[:30]}...",
-                fg=self.colors['danger']))
+                foreground=self.colors['danger']))
 
     def on_volume_change(self, value):
         """Callback when volume slider changes"""
@@ -494,7 +494,7 @@ class MusicSchedulerGUI:
         self.is_paused = False
         self.status_label.config(
             text="⏹️ Đã dừng phát nhạc",
-            fg=self.colors['warning'])
+            foreground=self.colors['warning'])
 
     def update_scheduler_jobs(self):
         """Cập nhật các jobs trong scheduler"""
@@ -528,7 +528,7 @@ class MusicSchedulerGUI:
         self.stop_btn.config(state=tk.NORMAL)
         self.status_label.config(
             text="▶️ Đang chạy - Chờ đến giờ phát nhạc...",
-            fg=self.colors['success'])
+            foreground=self.colors['success'])
 
         # Start APScheduler
         self.update_scheduler_jobs()
