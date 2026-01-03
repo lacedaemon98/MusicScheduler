@@ -78,11 +78,18 @@ class MusicSchedulerGUI:
             devices = sd.query_devices()
             self.device_info = []
             self.audio_devices = []
+            seen_names = set()  # Track unique device names
 
             # Get output devices only
             for idx, device in enumerate(devices):
                 if device['max_output_channels'] > 0:  # Output device
-                    device_name = f"{device['name']}"
+                    device_name = device['name'].strip()
+
+                    # Skip duplicates (same name already added)
+                    if device_name in seen_names:
+                        continue
+
+                    seen_names.add(device_name)
                     self.audio_devices.append(device_name)
                     self.device_info.append({
                         'index': idx,
