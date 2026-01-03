@@ -206,6 +206,14 @@ class MusicSchedulerGUI:
                                   font=("Helvetica", 10))
         minute_spin.pack(side=tk.LEFT, padx=(0, 15))
 
+        ttk.Label(add_frame, text="Vol:", font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 5))
+        self.schedule_volume_var = tk.IntVar(value=70)
+        schedule_vol_spin = ttk.Spinbox(add_frame, from_=0, to=100, width=5,
+                                       textvariable=self.schedule_volume_var,
+                                       font=("Helvetica", 10))
+        schedule_vol_spin.pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Label(add_frame, text="%", font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 10))
+
         add_btn = ttk.Button(add_frame, text="➕ Thêm Lịch",
                             command=self.add_schedule)
         add_btn.pack(side=tk.LEFT)
@@ -274,11 +282,15 @@ class MusicSchedulerGUI:
         try:
             hour = int(self.hour_var.get())
             minute = int(self.minute_var.get())
+            volume = int(self.schedule_volume_var.get())
             time_str = f"{hour:02d}:{minute:02d}"
 
-            if time_str not in self.scheduled_times:
-                self.scheduled_times.append(time_str)
-                self.scheduled_times.sort()
+            # Check if time already exists
+            time_exists = any(s['time'] == time_str if isinstance(s, dict) else s == time_str for s in self.scheduled_times)
+
+            if not time_exists:
+                self.scheduled_times.append({"time": time_str, "volume": volume})
+                self.scheduled_times.sort(key=lambda x: x['time'] if isinstance(x, dict) else x)
                 self.update_schedule_list()
                 self.save_config()
 
@@ -306,8 +318,14 @@ class MusicSchedulerGUI:
     def update_schedule_list(self):
         """Cập nhật danh sách lịch"""
         self.schedule_listbox.delete(0, tk.END)
-        for time_str in self.scheduled_times:
-            self.schedule_listbox.insert(tk.END, f"  🕐 {time_str}")
+        for schedule in self.scheduled_times:
+            if isinstance(schedule, dict):
+                time_str = schedule['time']
+                volume = schedule['volume']
+                self.schedule_listbox.insert(tk.END, f"  🕐 {time_str}  🔊 {volume}%")
+            else:
+                # Backward compatibility with old format
+                self.schedule_listbox.insert(tk.END, f"  🕐 {schedule}")
 
     def get_random_song(self):
         """Lấy bài hát ngẫu nhiên"""
@@ -322,7 +340,7 @@ class MusicSchedulerGUI:
 
         return random.choice(songs) if songs else None
 
-    def play_song_job(self, scheduled_time):
+    def play_song_job(self, scheduled_time, volume=70):
         """Job để phát nhạc - được gọi bởi APScheduler"""
         now = datetime.now()
         today = now.strftime('%Y-%m-%d')
@@ -333,9 +351,16 @@ class MusicSchedulerGUI:
 
         song = self.get_random_song()
         if song:
+            # Set volume for this schedule
+            self.current_volume = volume / 100.0
+
+            # Update volume slider UI to reflect schedule volume
+            self.root.after(0, lambda: self.volume_var.set(volume))
+            self.root.after(0, lambda: self.volume_label.config(text=f"{volume}%"))
+
             # Update UI
             self.root.after(0, lambda: self.status_label.config(
-                text=f"🎵 Đang phát: {song.name}",
+                text=f"🎵 Đang phát: {song.name} (Vol: {volume}%)",
                 foreground=self.colors['success']))
 
             # Play song in a separate thread to not block scheduler
@@ -509,10 +534,18 @@ class MusicSchedulerGUI:
         self.scheduler.remove_all_jobs()
 
         # Thêm jobs mới
-        for time_str in self.scheduled_times:
+        for schedule in self.scheduled_times:
+            if isinstance(schedule, dict):
+                time_str = schedule['time']
+                volume = schedule['volume']
+            else:
+                # Backward compatibility
+                time_str = schedule
+                volume = 70  # Default volume
+
             hour, minute = map(int, time_str.split(':'))
             self.scheduler.add_job(
-                func=lambda t=time_str: self.play_song_job(t),
+                func=lambda t=time_str, v=volume: self.play_song_job(t, v),
                 trigger='cron',
                 hour=hour,
                 minute=minute,
